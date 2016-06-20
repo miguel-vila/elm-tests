@@ -1,0 +1,40 @@
+<html>
+  <head>
+    <title>Elm Ports Exercise</title>
+  </head>
+  <body>
+    <div>
+      <h1>Elm app</h1>
+      <div id="elm-app"></div>
+    </div>
+    <div>
+      <h1>JS app</h1>
+      <div id="js-app">
+        <button onClick="sendToElm()">Send to elm</button>
+        <ul id="elems">
+        </ul>
+      </div>
+    </div>
+        <script type="text/javascript" src="elm.js"></script>
+        <script>
+          var elmAppElem = document.getElementById('elm-app');
+          var app = Elm.Main.embed(elmAppElem);
+          window.app = app;
+          window.sendToElm = function() {
+              console.log('sending to elm');
+              app.ports.jsMsgs.send(1);
+          };
+          var list = document.getElementById('elems');
+          window.addToList = function(i) {
+              var li = document.createElement('li');
+              var t = document.createTextNode(i.toString());
+              li.appendChild(t);
+              list.appendChild(li);
+          };
+          app.ports.elmMsgs.subscribe(function(i){
+              console.log('receiving: ',i);
+              window.addToList(i);
+          });
+        </script>
+  </body>
+</html>
