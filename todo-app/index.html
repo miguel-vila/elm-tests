@@ -1,0 +1,24 @@
+<html>
+  <head>
+    <title>Elm Todo</title>
+  </head>
+  <body>
+    <div id="elm-app"></div>
+    <script type="text/javascript" src="elm.js"></script>
+    <script>
+          var current = localStorage.getItem("todo");
+          console.log('current:',current);
+          var elmAppElem = document.getElementById('elm-app');
+          var app = Elm.Main.embed(elmAppElem);
+          window.app = app;
+          app.ports.storage.subscribe(function (data) {
+              localStorage.setItem('todo', JSON.stringify(data));
+          });
+          setTimeout(function(){
+              if(current) {
+                  app.ports.storageInput.send(JSON.parse(current));
+              }
+          });
+    </script>
+  </body>
+</html>

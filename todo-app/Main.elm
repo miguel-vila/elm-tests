@@ -1,9 +1,15 @@
+port module Main exposing (..)
+
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.App as Html
 import TodoStyles exposing (styles)
 import Json.Decode as Json
 import Html.Events exposing (on, keyCode, onInput, onCheck, onClick)
+
+import Json.Decode exposing ((:=))
+import Json.Encode
+
 
 type alias Todo =
     { id        : Int
@@ -28,6 +34,8 @@ type Msg
     | Filter FilterState
     | SetText String
     | ClearCompleted
+    | Set Model
+    | NoOp
 
 initialTodo id = { id = id
                  , title = ""
@@ -46,39 +54,49 @@ initialModel =
 completeTodo : Todo -> Todo
 completeTodo todo = { todo | completed = not todo.completed }
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
         Add todo ->
             let nextId = model.currentId + 1
-            in { model
-                   | currentId = nextId
-                   , todos = todo :: model.todos
-                   , todo = initialTodo nextId
-               }
+                newModel = { model
+                               | currentId = nextId
+                               , todos = todo :: model.todos
+                               , todo = initialTodo nextId
+                           }
+            in (newModel, sendToStorage newModel)
         Complete todo ->
             let modifyTodo td = if td.id == todo.id then completeTodo todo else td
-            in { model
-                   | todos = List.map modifyTodo model.todos
-               }
+                newModel = { model
+                               | todos = List.map modifyTodo model.todos
+                           }
+            in (newModel, sendToStorage newModel)
         Delete todo ->
-            { model
-                | todos = List.filter (\td -> td.id /= todo.id) model.todos
-            }
+            let newModel = { model
+                               | todos = List.filter (\td -> td.id /= todo.id) model.todos
+                           }
+            in (newModel, sendToStorage newModel)
         Filter filterState ->
-            { model
-                | filter = filterState
-            }
+            let newModel = { model
+                               | filter = filterState
+                           }
+            in (newModel, sendToStorage newModel)
         SetText todoText ->
             let todo = model.todo
                 updatedTodo = { todo | title = todoText }
-            in { model
-                   | todo = updatedTodo
-               }
+                newModel = { model
+                               | todo = updatedTodo
+                           }
+            in (newModel, sendToStorage newModel)
         ClearCompleted ->
-            { model
-                | todos = clearCompleted model.todos
-            }
+            let newModel = { model
+                           | todos = clearCompleted model.todos
+                       }
+            in (newModel, sendToStorage newModel)
+        Set newModel ->
+            (newModel, Cmd.none)
+        NoOp ->
+            (model, Cmd.none)
 
 clearCompleted : List Todo -> List Todo
 clearCompleted = List.filter (\todo -> not todo.completed)
@@ -163,10 +181,78 @@ view model =
             ]
         ]
 
+encodeTodo : Todo -> Json.Encode.Value
+encodeTodo todo =
+    Json.Encode.object
+        [ ("id", Json.Encode.int todo.id)
+        , ("title", Json.Encode.string todo.title)
+        , ("completed", Json.Encode.bool todo.completed)
+        , ("editing", Json.Encode.bool todo.editing)
+        ]
+
+encodeFilter : FilterState -> Json.Encode.Value
+encodeFilter filter = Json.Encode.string (toString filter)
+
+decodeModel : Json.Decode.Value -> Result String Model
+decodeModel json =
+    Json.Decode.decodeValue modelDecoder json
+
+modelDecoder : Json.Decode.Decoder Model
+modelDecoder =
+    Json.Decode.object4 Model
+        ("currentId" := Json.Decode.int)
+        ("todos"     := Json.Decode.list todoDecoder)
+        ("todo"      := todoDecoder)
+        ("filter"    := filterDecoder)
+
+todoDecoder : Json.Decode.Decoder Todo
+todoDecoder =
+    Json.Decode.object4 Todo
+        ("id" := Json.Decode.int)
+        ("title" := Json.Decode.string)
+        ("completed" := Json.Decode.bool)
+        ("editing" := Json.Decode.bool)
+            
+filterDecoder : Json.Decode.Decoder FilterState
+filterDecoder =
+    let decodeToFilterState string =
+            case string of
+                "All" -> Result.Ok All
+                "Active" -> Result.Ok Active
+                "Completed" -> Result.Ok Completed
+                _ -> Result.Err ("Not a valid filterState: " ++ string)
+    in Json.Decode.customDecoder Json.Decode.string decodeToFilterState
+        
+mapStorageInput : Json.Decode.Value -> Msg
+mapStorageInput modelJson =
+    case decodeModel modelJson of
+        Result.Ok model -> Set model
+        Result.Err _ -> NoOp
+
+sendToStorage : Model -> Cmd Msg
+sendToStorage model =
+    encodeJson model |> storage
+                      
+encodeJson : Model -> Json.Encode.Value
+encodeJson model =
+    Json.Encode.object
+        [ ("currentId", Json.Encode.int model.currentId)
+        , ("todos", Json.Encode.list (List.map encodeTodo model.todos))
+        , ("todo", encodeTodo model.todo)
+        , ("filter", encodeFilter model.filter)
+        ]
                    
 main =
-      Html.beginnerProgram
-          { model = initialModel
+      Html.program
+          { init = (initialModel, Cmd.none)
           , update = update
           , view = view
+          , subscriptions = subscriptions
           }
+
+subscriptions model =
+    storageInput mapStorageInput
+
+port storageInput : (Json.Decode.Value -> msg) -> Sub msg
+
+port storage : Json.Encode.Value -> Cmd msg

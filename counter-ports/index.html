@@ -1,0 +1,27 @@
+<html>
+  <head>
+    <title>Elm Counter</title>
+  </head>
+  <body>
+    <div id="elm-app"></div>
+    <script type="text/javascript" src="elm.js"></script>
+    <script>
+          var current = localStorage.getItem("counter");
+          console.log('current:',current);
+          var elmAppElem = document.getElementById('elm-app');
+          var app = Elm.Main.embed(elmAppElem);
+          window.app = app;
+          app.ports.incrementCmd.subscribe(function (data){
+              console.log('increment :',data);
+          });
+          app.ports.storage.subscribe(function (data) {
+              localStorage.setItem('counter', JSON.stringify(data));
+          });
+          setTimeout(function(){
+              if(current) {
+                  app.ports.storageInput.send(JSON.parse(current));
+              }
+          });
+    </script>
+  </body>
+</html>

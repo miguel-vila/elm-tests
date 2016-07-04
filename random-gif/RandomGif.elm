@@ -1,4 +1,4 @@
-module RandomGif exposing (init, update, view)
+module RandomGif exposing (init, update, view, Model, Msg)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
