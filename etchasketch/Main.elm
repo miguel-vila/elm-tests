@@ -162,7 +162,7 @@ update msg model =
                             nextAnimation =
                                 model.animations
                                     |> List.head
-                                    |> Maybe.map (\animation -> animation model.clock)
+                                    |> Maybe.map ((|>) model.clock)
                                     |> Maybe.withDefault (static 0)
 
                             nextAnimations =
